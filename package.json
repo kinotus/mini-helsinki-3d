@@ -26,12 +26,13 @@
     "build": "node scripts/clean.mjs dist && run-s bundle copy-assets",
     "build-all": "node scripts/clean.mjs build && run-s build build-pages build-data docs",
     "build-data": "node scripts/build-data.mjs",
-    "build-helsinki-data": "run-s build-helsinki-routes build-helsinki-realtime build-helsinki-timetable build-helsinki-ports",
+    "build-helsinki-data": "run-s build-helsinki-routes build-helsinki-realtime build-helsinki-timetable build-helsinki-ports build-helsinki-water-bus",
     "build-helsinki-ports": "node scripts/build-helsinki-ports.mjs",
     "build-helsinki-precipitation": "rollup -c plugins/mt3d-plugin-helsinki-precipitation/rollup.config.mjs",
     "build-helsinki-realtime": "node scripts/build-helsinki-realtime-index.mjs",
     "build-helsinki-routes": "node scripts/build-helsinki-routes.mjs",
     "build-helsinki-timetable": "node scripts/build-helsinki-timetable.mjs",
+    "build-helsinki-water-bus": "node scripts/build-helsinki-water-bus.mjs",
     "build-pages": "node scripts/build-pages.mjs && node scripts/gen-index.mjs prod",
     "bundle": "rollup -c",
     "clean": "node scripts/clean.mjs dist dev build",
@@ -45,7 +46,8 @@
     "prepublishOnly": "npm run build",
     "test-helsinki-precipitation": "node --test plugins/mt3d-plugin-helsinki-precipitation/test/*.test.mjs",
     "test-helsinki-realtime": "node --test scripts/test-helsinki-realtime.mjs",
-    "test-helsinki-stop-bundling": "node --test scripts/test-helsinki-stop-bundling.mjs"
+    "test-helsinki-stop-bundling": "node --test scripts/test-helsinki-stop-bundling.mjs",
+    "test-helsinki-water-bus": "node --test scripts/test-helsinki-water-bus.mjs"
   },
   "dependencies": {
     "@deck.gl/core": "^8.9.36",
@@ -78,6 +80,7 @@
     "mapbox-gl": "~3.32.0",
     "mapbox-gl-animated-popup": "^0.4.0",
     "pbf": "^5.1.2",
+    "proj4": "^2.23.0",
     "suncalc": "^2.0.2",
     "swiper": "^12.2.0",
     "three": "^0.183.2"

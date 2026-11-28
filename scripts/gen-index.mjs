@@ -147,7 +147,7 @@ if (profile === 'helsinki') {
     overrides.push("options.transitMinZoom = {rail: 7.5, metro: 8, ferry: 9.5, tram: 11, bus: 12};");
     overrides.push("options.appAttribution = '<a href=\"https://github.com/kinotus/mini-helsinki-3d\" target=\"_blank\" rel=\"noopener noreferrer\">Mini Helsinki 3D</a> · <a href=\"https://www.digitraffic.fi/\" target=\"_blank\" rel=\"noopener noreferrer\">Digitraffic</a>';");
     overrides.push("options.dataUrl = '';");
-    overrides.push(`options.dataSources = [{id: 'hsl', routeUrl: 'data/hsl-routes.json', timetableUrl: 'data/hsl-timetable.json.gz', serviceAlertUrl: ${JSON.stringify(`${realtimeBaseUrl}/service-alerts`)}, vehiclePositionUrl: ${JSON.stringify(`${realtimeBaseUrl}/vehicle-positions`)}, tripIndexUrl: 'data/hsl-realtime-index.json.gz'}, {id: 'digitraffic', portUrl: 'data/helsinki-ports.json'}];`);
+    overrides.push(`options.dataSources = [{id: 'hsl', routeUrl: 'data/hsl-routes.json', timetableUrl: 'data/hsl-timetable.json.gz', serviceAlertUrl: ${JSON.stringify(`${realtimeBaseUrl}/service-alerts`)}, vehiclePositionUrl: ${JSON.stringify(`${realtimeBaseUrl}/vehicle-positions`)}, tripIndexUrl: 'data/hsl-realtime-index.json.gz', waterBusRouteUrl: 'data/water-bus-routes.json', waterBusPierUrl: 'data/water-bus-piers.json'}, {id: 'digitraffic', portUrl: 'data/helsinki-ports.json'}];`);
     overrides.push('options.clockControl = true;');
     overrides.push('options.clock24Hour = true;');
     overrides.push('options.searchControl = true;');

@@ -44,6 +44,8 @@ for (const mode of ['dev', 'prod']) {
         assert.match(html, /options\.minZoom = 10;/);
         assert.match(html, /options\.maxBounds = \[\[23\.8,59\.8\],\[25\.7,60\.6\]\];/);
         assert.match(html, /options\.renderWorldCopies = false;/);
+        assert.match(html, /waterBusRouteUrl: 'data\/water-bus-routes\.json'/);
+        assert.match(html, /waterBusPierUrl: 'data\/water-bus-piers\.json'/);
     });
 }
 

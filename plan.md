@@ -644,6 +644,201 @@ resize/removal/recreation, and the existing demo/state behavior. Device-specific
 performance and accessibility acceptance still require testing.
 
 
+## Helsinki water bus routes and piers feature plan
+
+### Scope and analyzed source data
+
+Add static Helsinki water bus routes and piers without vessel positions,
+departure data, trip planning, schedules, or service alerts. The files are
+visual geographic inputs only. The pier detail view contains a link to the
+City of Helsinki water-traffic information page:
+
+https://www.hel.fi/fi/kulttuuri-ja-vapaa-aika/ulkoilu-puistot-ja-luontokohteet/saaret/vesiliikenne
+
+Use the two supplied local files as the complete source:
+
+- `data-raw/vesibussireitit_EPSG3879.geojson`
+- `data-raw/vesibussilaiturit_EPSG3879.geojson`
+
+Analysis of the supplied files:
+
+- Both are JSON `FeatureCollection`s, but neither is standard CRS84 GeoJSON.
+  Their coordinates are EPSG:3879 (ETRS-GK25 / ETRS-GK25FIN), identified by
+  the filenames. Neither file has an explicit `crs` member, so the build
+  contract must provide the source CRS rather than infer it from each file.
+- The routes file contains 16 features: 15 `MultiLineString`s and one
+  `LineString`, with 43 line parts and 6,253 coordinates in total. Every
+  feature has only the properties `id` and `reitin_nimi`.
+- The piers file contains 40 `Point` features. Every feature has only the
+  properties `id` and `karttanimi`.
+- All source coordinates are finite 2D pairs. Route coordinate ranges are
+  X 25,487,209.7405–25,514,941.3054 and Y 6,669,291.5964–6,676,251.2208.
+  Pier coordinate ranges are X 25,492,743.5254–25,508,917.5642 and
+  Y 6,669,390.0940–6,676,328.3153.
+- IDs and names are unique and complete in both files. Names use Finnish
+  characters and some route names describe services rather than piers.
+- The geometries contain no zero-length route segments or short/empty line
+  parts. Some route parts contain only two vertices and must be retained.
+- The files contain no explicit route-to-pier membership. Do not join features
+  by numeric `id`, infer membership from matching names, or manufacture a
+  route stop sequence.
+
+### 1. Convert EPSG:3879 at build time
+
+- Add `scripts/build-helsinki-water-bus.mjs` and a
+  `build-helsinki-water-bus` npm command; include it in
+  `build-helsinki-data`.
+- Add a maintained coordinate-projection dependency, preferably `proj4`, and
+  define explicit source and target projections:
+  - Source: EPSG:3879, GK25FIN, metres.
+  - Target: WGS84 longitude/latitude compatible with GeoJSON/CRS84.
+- Projection happens only during preprocessing. Do not transform coordinates
+  in the browser, expose a CRS selector, or pass EPSG:3879 coordinates directly
+  to Mapbox.
+- Normalize every `LineString` and `MultiLineString` coordinate in the routes
+  file, preserving each part and coordinate ordering. Keep the single
+  `LineString` as valid output or normalize all route geometries to
+  `MultiLineString`; choose one documented, consistent output form.
+- Validate source geometry before transformation. Fail explicitly for missing
+  files, non-finite or non-2D positions, unsupported geometry, empty line
+  parts, missing names, duplicate IDs, or duplicate coordinates.
+- Validate transformed output positions as finite WGS84 coordinates in the
+  expected Helsinki-area ranges: longitude approximately 24.5–25.5 and
+  latitude approximately 59.8–60.5. Validate output by geometry, not by
+  relying only on the source bounds.
+- Remove the filename/CRS ambiguity from generated data. The browser assets
+  are standard GeoJSON in `[longitude, latitude]` order and must not contain a
+  legacy `crs` member.
+- Generate two deployable files:
+  - `build/data/water-bus-routes.json`
+  - `build/data/water-bus-piers.json`
+- Normalize source attributes into a small stable schema. Routes use
+  `featureType: water-bus-route`, `id`, `name`, and display `color`. Piers use
+  `featureType: water-bus-pier`, `id`, `name`, and display `color`. Keep the
+  generated IDs stable from the source IDs, prefixed to avoid collisions.
+- Retain only the properties needed by rendering and the pier panel. Escape
+  all generated user-visible strings when constructing DOM/HTML.
+
+### 2. Integrate as a static Helsinki-only source
+
+- Add the two generated URLs to the Helsinki source in `scripts/gen-index.mjs`
+  as dedicated fields, for example `waterBusRouteUrl` and `waterBusPierUrl`.
+  Preserve them in `normalizeDataSource`.
+- Add separate loading, cleanup, and recreation handling alongside existing
+  static routes and ports. Wait for map initialization before adding sources.
+- A failed load must surface through the existing error UI and console
+  reporting and must not leave a partial source/layer state.
+- Keep this source independent from `routeUrl`, `timetableUrl`,
+  `serviceAlertUrl`, `vehiclePositionUrl`, and `tripIndexUrl`. Water bus
+  features must not create HSL stations, station-search results, timetable
+  requests, realtime vehicle objects, or service-alert state.
+- Track the new source separately so HSL data-source refreshes/removals do not
+  accidentally alter the water bus layers.
+
+### 3. Render routes and piers
+
+Render three Mapbox layers:
+
+- Route lines: turquoise, `#00b9e4`; rounded caps/joins, approximately 0.9
+  opacity. Show from regional water-traffic zoom, initially aligned with the
+  ferry threshold (`options.transitMinZoom.ferry`, currently 9.5).
+- Piers: dark turquoise, `#007a97`, with a clear white stroke. Use a
+  zoom-interpolated circle radius and enough hit area for touch interaction.
+- Pier names: Finnish `karttanimi`, displayed from a closer zoom. Use the
+  existing bold font and a white halo for readability over water, land, and
+  buildings.
+
+Keep the two route colors as explicit design constants rather than deriving
+them from HSL route modes. These geometries are a separate city water-traffic
+dataset. Extend `updateVisualizationLayerOrder` so routes sit above the base
+map, below realtime vehicles and stop labels, and piers/pier labels remain
+above their route lines.
+
+### 4. Add one simple pier detail page
+
+Create a dedicated `WaterBusPierPanel`, not a `StationPanel` or HSL timetable
+panel.
+
+On clicking a pier, display only:
+
+- The pier's `karttanimi` as the title.
+- A Finnish label such as **Vesibussilaituri**.
+- A short statement that current routes and schedules are available from the
+  City of Helsinki.
+- **Vesiliikenteen reitit ja aikataulut ↗**, linking to the official page
+  above with `target="_blank"` and `rel="noopener noreferrer"`.
+
+Do not display departures, arrival times, vehicle estimates, route-search
+controls, HSL Reittiopas links, or an empty timetable state. Hover can show a
+compact pier-name popup. Clicking selects the pier and opens the panel;
+clicking empty map space or the panel close control deselects it.
+
+Extend picking and selection without adding piers to route/station searches:
+
+- Point piers take precedence over nearby route lines.
+- A water bus route is independently hoverable/selectable only for its route
+  name and highlight state; it never opens a timetable.
+- Unknown/hidden water bus features cannot be picked.
+
+### 5. Add one Helsinki layer control
+
+Add one layer-panel entry, **Vesibussit**, controlling routes, pier markers,
+and pier labels together. Add an explicit `waterBus` category to the Helsinki
+visibility state, initially `visible`.
+
+Apply the saved in-session toggle state after asynchronous loading so a toggle
+used before loading completes is not overwritten. The source toggle must not
+control HSL ferry routes/stops or the Digitraffic port layer.
+
+### 6. Verification and documentation
+
+Add focused preprocessing tests covering:
+
+- The supplied inputs produce 16 route features, 40 piers, and the expected
+  geometry counts.
+- EPSG:3879 conversion yields WGS84 longitude/latitude and retains all 43
+  source line parts without losing vertices.
+- `LineString` and `MultiLineString` are both accepted.
+- Empty line parts, unsupported geometries, malformed coordinates, missing
+  names, duplicate IDs, and implausible transformed output fail explicitly.
+- Generated JSON contains no `crs` member and is standard GeoJSON.
+- Finnish names and generated IDs survive transformation unchanged.
+
+UI verification:
+
+- Routes use turquoise and piers dark turquoise.
+- Route and pier clicks do not enter the HSL station or realtime flows.
+- The simple panel contains no departure/schedule data and opens the official
+  Helsinki page correctly.
+- Visibility toggling works before and after loading, and removal/recreation
+  does not duplicate layers or reset the toggle.
+- Dense multi-part routes, including the 14-part eastern archipelago route,
+  render without gaps or unexpected simplification.
+- Existing HSL routes, HSL ferries, ports, alerts, vehicles, and Tokyo mode
+  remain unchanged.
+
+Update the Helsinki build instructions and About/source notices with:
+
+- The two required `data-raw` inputs and their EPSG:3879 requirement.
+- The build command and generated files.
+- The fact that schedules and operational information come from the City of
+  Helsinki water-traffic page.
+- The explicit absence of realtime vessel information and schedules in the
+  app.
+
+**Acceptance criteria**
+
+- Two local EPSG:3879 source files produce valid CRS84 GeoJSON without runtime
+  coordinate conversion.
+- All 16 routes and 40 piers are visible in the Helsinki profile with the
+  specified turquoise and dark turquoise styling.
+- One **Vesibussit** toggle controls routes, piers, and labels without
+  affecting existing HSL ferry or port layers.
+- Clicking a pier opens only the lightweight Helsinki water-traffic panel and
+  its official external link.
+- No water bus schedule, vessel-position, service-alert, or HSL timetable
+  request is made, and no route-to-pier membership is fabricated.
+
 ## HSL tariff-zone overlay feature plan
 
 **Status: planned; initial release covers A-D.** Add E when authoritative HSL

@@ -8,3 +8,4 @@ export {default as SharePanel} from './share-panel';
 export {default as StationPanel} from './station-panel';
 export {default as TrackingModePanel} from './tracking-mode-panel';
 export {default as TrainPanel} from './train-panel';
+export {default as WaterBusPierPanel} from './water-bus-pier-panel';
