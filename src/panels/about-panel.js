@@ -79,6 +79,8 @@ export default class extends Panel {
                     ' · ',
                     '<a href="https://www.digitraffic.fi/" target="_blank" rel="noopener noreferrer">Digitraffic</a>',
                     ' · ',
+                    '<a href="https://www.hel.fi/fi/paatoksenteko-ja-hallinto/tietoa-helsingista/kartat-ja-paikkatieto/paikkatiedot-tehokayttoon/avoimet-paikkatiedot" target="_blank" rel="noopener noreferrer">Helsingin kaupunki</a>',
+                    ' · ',
                     '<a href="https://github.com/kinotus/mini-helsinki-3d" target="_blank" rel="noopener noreferrer">Mini Helsinki 3D</a>',
                     '</div>',
                     `<div class="card-title">${map.dict['static-update']}</div>`,

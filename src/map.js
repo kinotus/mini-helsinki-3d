@@ -204,7 +204,7 @@ export default class extends Evented {
         if (me.isHelsinkiProfile() || !options.configControl) {
             options.customAttribution = helpers.flat([
                 options.customAttribution,
-                me.isHelsinkiProfile() && '<a href="https://www.hsl.fi/en/hsl/open-data" target="_blank" rel="noopener noreferrer">© Helsingin seudun liikenne HSL 2026-11-25</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>',
+                me.isHelsinkiProfile() && '<a href="https://www.hsl.fi/en/hsl/open-data" target="_blank" rel="noopener noreferrer">© Helsingin seudun liikenne HSL 2026-11-25</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>, <a href="https://www.hel.fi/fi/paatoksenteko-ja-hallinto/tietoa-helsingista/kartat-ja-paikkatieto/paikkatiedot-tehokayttoon/avoimet-paikkatiedot" target="_blank" rel="noopener noreferrer">Helsingin kaupunki</a>',
                 !options.configControl && options.appAttribution
             ]).filter(Boolean);
         }
