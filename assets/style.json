@@ -1021,7 +1021,7 @@
                 "line-join": "round"
             },
             "paint": {
-                "line-color": "hsl(221, 100%, 81%)",
+                "line-color": "#9FC9EB",
                 "line-width": [
                     "interpolate",
                     [
@@ -1088,7 +1088,7 @@
             "source": "composite",
             "source-layer": "water",
             "paint": {
-                "fill-color": "hsl(221, 100%, 81%)",
+                "fill-color": "#9FC9EB",
                 "fill-emissive-strength": 0,
                 "fill-antialias": false
             },

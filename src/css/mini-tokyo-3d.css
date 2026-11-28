@@ -703,6 +703,19 @@
 .mini-tokyo-3d .station-panel.hsl-timetable-panel #panel-content > div {
     display: block;
 }
+.mini-tokyo-3d .water-bus-pier-panel {
+    height: min(220px, 33%);
+}
+.mini-tokyo-3d .water-bus-pier-panel .water-bus-pier-kind {
+    color: #7fe4f8;
+    font-weight: bold;
+}
+.mini-tokyo-3d .water-bus-pier-panel p {
+    margin: 10px 0;
+}
+.mini-tokyo-3d .water-bus-pier-panel a {
+    color: #9de8f7;
+}
 .mini-tokyo-3d .hsl-station-date {
     display: flex;
     align-items: center;

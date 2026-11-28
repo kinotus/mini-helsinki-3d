@@ -127,6 +127,24 @@ sent to browsers.
 The same build command also generates `build/data/hsl-timetable.json.gz`, a
 compact station-departure index with HSL calendar and exception dates.
 
+The Helsinki build also converts the City of Helsinki water bus inputs
+`data-raw/vesibussireitit_EPSG3879.geojson` and
+`data-raw/vesibussilaiturit_EPSG3879.geojson` from EPSG:3879 to standard
+CRS84/WGS84 GeoJSON. Run the conversion independently with:
+
+```bash
+npm run build-helsinki-water-bus
+```
+
+This generates `build/data/water-bus-routes.json` and
+`build/data/water-bus-piers.json`. Deploy both files with the other Helsinki
+data. The map displays turquoise routes and dark turquoise pier markers.
+Clicking a pier opens a lightweight page linking to the
+[City of Helsinki water traffic information](https://www.hel.fi/fi/kulttuuri-ja-vapaa-aika/ulkoilu-puistot-ja-luontokohteet/saaret/vesiliikenne)
+in Finnish. Mini Helsinki 3D does not include water bus vessel positions or
+schedules; the official Helsinki page is the source for operational
+information.
+
 The Helsinki profile polls the documented HSL GTFS-RT v2 service-alert and
 vehicle-position endpoints. Service alerts update every five minutes and appear
 from the warning control; vehicle positions update every five seconds and keep

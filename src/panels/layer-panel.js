@@ -20,6 +20,7 @@ export default class extends Panel {
                 alerts: 'Liikennetiedotteet',
                 vehicles: 'Reaaliaikaiset ajoneuvot',
                 ports: 'Satamat',
+                waterBus: 'Vesibussit',
                 buildings: 'Rakennukset'
             };
             const categories = [
@@ -28,6 +29,7 @@ export default class extends Panel {
                 'alerts',
                 'vehicles',
                 'ports',
+                'waterBus',
                 'buildings'
             ];
 

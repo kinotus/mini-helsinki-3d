@@ -19,7 +19,7 @@ import {normalizeServiceAlerts, normalizeVehiclePositions, resolveHslTrip} from 
 import * as helpersWebgl from './helpers/helpers-webgl';
 import {GeoJsonLayer, GlowCompositeLayer, RailwayGlowLayer, RailwayStatusGlowLayer, STROKE_WIDTH_SCALE_STOPS, StationGlowLayer, ThreeLayer, Tile3DLayer, TrafficLayer, ZoomWidthScaleExtension} from './layers';
 import {isExpired, loadBusData, loadDictionary, loadDynamicBusData, loadDynamicFlightData, loadDynamicTrainData, loadGtfsRealtimeData, loadStaticData, loadTimetableData, updateOdptUrl} from './loader';
-import {AboutPanel, BusPanel, LayerPanel, RailwayPanel, ServiceAlertsPanel, SharePanel, StationPanel, TrackingModePanel, TrainPanel} from './panels';
+import {AboutPanel, BusPanel, LayerPanel, RailwayPanel, ServiceAlertsPanel, SharePanel, StationPanel, TrackingModePanel, TrainPanel, WaterBusPierPanel} from './panels';
 import Plugin from './plugin';
 import nearestCloserPointOnLine from './turf/nearest-closer-point-on-line';
 
@@ -150,6 +150,7 @@ export default class extends Evented {
             ['alerts', 'none'],
             ['vehicles', 'visible'],
             ['ports', 'visible'],
+            ['waterBus', 'visible'],
             ['buildings', 'visible']
         ]);
         me.dataUrl = options.dataUrl;
@@ -232,6 +233,8 @@ export default class extends Evented {
         me.staticRoutesLoading = new Set();
         me.portSources = new Map();
         me.portSourcesLoading = new Set();
+        me.waterBusSources = new Map();
+        me.waterBusSourcesLoading = new Set();
         me.serviceAlerts = new Map();
         me.realtimeFeeds = new Map();
         me.realtimeVehicleData = new Map();
@@ -284,6 +287,7 @@ export default class extends Evented {
         me.refreshBusData();
         me.refreshStaticRouteData();
         me.refreshPortData();
+        me.refreshWaterBusData();
         me.refreshRealtimeData();
     }
 
@@ -707,6 +711,12 @@ export default class extends Evented {
                     me.setLayerVisibility(layerId, visibility);
                 }
             }
+        } else if (category === 'waterBus') {
+            for (const entry of me.waterBusSources.values()) {
+                for (const layerId of entry.layerIds) {
+                    me.setLayerVisibility(layerId, visibility);
+                }
+            }
         } else if (category === 'buildings') {
             for (const layerId of me.layerVisibility.model.keys()) {
                 me.setLayerVisibility(layerId, visibility);
@@ -818,6 +828,9 @@ export default class extends Evented {
         }
         if (source.portUrl) {
             me.refreshPortData();
+        }
+        if (source.waterBusRouteUrl || source.waterBusPierUrl) {
+            me.refreshWaterBusData();
         }
         if (source.serviceAlertUrl || source.vehiclePositionUrl) {
             me.refreshRealtimeData();
@@ -3353,6 +3366,186 @@ export default class extends Evented {
         }
     }
 
+    refreshWaterBusData() {
+        const me = this,
+            map = me.map,
+            sources = me.dataSources.filter(source =>
+                (source.waterBusRouteUrl || source.waterBusPierUrl) && !isExpired(source)
+            ),
+            sourceIds = new Set(sources.map(({id}) => id));
+
+        for (const [id, entry] of me.waterBusSources) {
+            if (!sourceIds.has(id)) {
+                for (const layerId of entry.layerIds) {
+                    map.removeLayer(layerId);
+                }
+                map.removeSource(entry.routeSourceId);
+                map.removeSource(entry.pierSourceId);
+                me.waterBusSources.delete(id);
+            }
+        }
+        for (const source of sources) {
+            if (me.waterBusSourcesLoading.has(source.id) ||
+                me.waterBusSources.has(source.id)) {
+                continue;
+            }
+            me.waterBusSourcesLoading.add(source.id);
+            Promise.resolve().then(() => {
+                if (!source.waterBusRouteUrl || !source.waterBusPierUrl) {
+                    throw new Error(`Water bus source "${source.id}" requires route and pier URLs`);
+                }
+                return Promise.all([
+                    helpers.loadJSON(source.waterBusRouteUrl),
+                    helpers.loadJSON(source.waterBusPierUrl),
+                    me.initialized ? Promise.resolve() : new Promise(resolve => {
+                        me.once('initialized', resolve);
+                    })
+                ]);
+            }).then(([routes, piers]) => {
+                if (!sourceIds.has(source.id) || me.waterBusSources.has(source.id)) {
+                    return;
+                }
+                const routeSourceId = `${source.id}-water-bus-routes`,
+                    pierSourceId = `${source.id}-water-bus-piers`,
+                    routeLayerId = `${routeSourceId}-lines`,
+                    pierLayerId = `${pierSourceId}-points`,
+                    pierLabelLayerId = `${pierSourceId}-labels`,
+                    minZoom = me.transitMinZoom &&
+                        me.transitMinZoom.ferry !== undefined ?
+                        me.transitMinZoom.ferry : 9.5;
+
+                map.addSource(routeSourceId, {
+                    type: 'geojson',
+                    data: routes,
+                    promoteId: 'id'
+                });
+                map.addSource(pierSourceId, {
+                    type: 'geojson',
+                    data: piers,
+                    promoteId: 'id'
+                });
+                me.addLayer({
+                    id: routeLayerId,
+                    type: 'line',
+                    source: routeSourceId,
+                    minzoom: minZoom,
+                    layout: {
+                        'line-cap': 'round',
+                        'line-join': 'round'
+                    },
+                    paint: {
+                        'line-color': '#00b9e4',
+                        'line-opacity': 0.9,
+                        'line-width': [
+                            'interpolate',
+                            ['exponential', 2],
+                            ['zoom'],
+                            9.5, ['case', ['any',
+                                ['boolean', ['feature-state', 'hover'], false],
+                                ['boolean', ['feature-state', 'selected'], false]
+                            ], 3, 1.5],
+                            16, ['case', ['any',
+                                ['boolean', ['feature-state', 'hover'], false],
+                                ['boolean', ['feature-state', 'selected'], false]
+                            ], 9, 4],
+                            22, ['case', ['any',
+                                ['boolean', ['feature-state', 'hover'], false],
+                                ['boolean', ['feature-state', 'selected'], false]
+                            ], 22, 12]
+                        ],
+                        'line-emissive-strength': 1
+                    }
+                }, 'trees');
+                me.addLayer({
+                    id: pierLayerId,
+                    type: 'circle',
+                    source: pierSourceId,
+                    minzoom: minZoom,
+                    paint: {
+                        'circle-color': '#007a97',
+                        'circle-stroke-color': '#ffffff',
+                        'circle-stroke-width': 1.5,
+                        'circle-radius': [
+                            'interpolate',
+                            ['linear'],
+                            ['zoom'],
+                            9.5, 3,
+                            14, ['case', ['any',
+                                ['boolean', ['feature-state', 'hover'], false],
+                                ['boolean', ['feature-state', 'selected'], false]
+                            ], 9, 6],
+                            20, ['case', ['any',
+                                ['boolean', ['feature-state', 'hover'], false],
+                                ['boolean', ['feature-state', 'selected'], false]
+                            ], 16, 12]
+                        ],
+                        'circle-emissive-strength': 1
+                    }
+                }, 'trees');
+                me.addLayer({
+                    id: pierLabelLayerId,
+                    type: 'symbol',
+                    source: pierSourceId,
+                    minzoom: Math.max(minZoom, 13),
+                    layout: {
+                        'text-field': ['get', 'name'],
+                        'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                        'text-size': 12,
+                        'text-offset': [0, 1.2],
+                        'text-anchor': 'top',
+                        'text-allow-overlap': false,
+                        'text-optional': true
+                    },
+                    paint: {
+                        'text-color': '#003f4d',
+                        'text-halo-color': '#ffffff',
+                        'text-halo-width': 2,
+                        'text-emissive-strength': 1
+                    }
+                }, 'trees');
+                const layerIds = [routeLayerId, pierLayerId, pierLabelLayerId];
+
+                me.waterBusSources.set(source.id, {
+                    routeSourceId,
+                    pierSourceId,
+                    routeLayerId,
+                    pierLayerId,
+                    pierLabelLayerId,
+                    layerIds
+                });
+                me.setHelsinkiLayerVisibility('waterBus',
+                    me.getHelsinkiLayerVisibility('waterBus'));
+                me.updateVisualizationLayerOrder();
+            }).then(() => {
+                me.waterBusSourcesLoading.delete(source.id);
+            }).catch(error => {
+                const routeSourceId = `${source.id}-water-bus-routes`,
+                    pierSourceId = `${source.id}-water-bus-piers`,
+                    layerIds = [
+                        `${routeSourceId}-lines`,
+                        `${pierSourceId}-points`,
+                        `${pierSourceId}-labels`
+                    ];
+
+                for (const layerId of layerIds) {
+                    if (map.getLayer(layerId)) {
+                        map.removeLayer(layerId);
+                    }
+                }
+                if (map.getSource(routeSourceId)) {
+                    map.removeSource(routeSourceId);
+                }
+                if (map.getSource(pierSourceId)) {
+                    map.removeSource(pierSourceId);
+                }
+                me.waterBusSources.delete(source.id);
+                me.waterBusSourcesLoading.delete(source.id);
+                console.error(`Mini Tokyo 3D: failed to load water bus source "${source.id}".`, error);
+                showErrorMessage(me.container);
+            });
+        }
+    }
+
     refreshPortData() {
         const me = this,
             map = me.map,
@@ -3782,6 +3975,9 @@ export default class extends Evented {
         }
         for (const entry of me.portSources.values()) {
             layerIds.push(...entry.layerIds.filter(id => id.includes('-berth-areas-')));
+        }
+        for (const entry of me.waterBusSources.values()) {
+            layerIds.push(...entry.layerIds);
         }
         for (const entry of me.realtimeVehicleData.values()) {
             layerIds.push(`${entry.sourceId}-halo`, entry.sourceId);
@@ -4712,6 +4908,42 @@ export default class extends Evented {
                 };
             }
         }
+        for (const entry of me.waterBusSources.values()) {
+            object = map.queryRenderedFeatures(point, {layers: [
+                entry.pierLayerId,
+                entry.pierLabelLayerId
+            ]})[0];
+            if (object) {
+                return {
+                    id: object.properties.id,
+                    type: 'water-bus-pier',
+                    coord: object.geometry.coordinates,
+                    sourceId: entry.pierSourceId,
+                    properties: object.properties
+                };
+            }
+            object = map.queryRenderedFeatures([
+                [point.x - RAILWAY_PICK_RADIUS, point.y - RAILWAY_PICK_RADIUS],
+                [point.x + RAILWAY_PICK_RADIUS, point.y + RAILWAY_PICK_RADIUS]
+            ], {layers: [entry.routeLayerId]})[0];
+            if (object) {
+                const coordinates = object.geometry.type === 'LineString' ?
+                    object.geometry.coordinates : object.geometry.coordinates.flat();
+                const lngs = coordinates.map(coord => coord[0]);
+                const lats = coordinates.map(coord => coord[1]);
+
+                return {
+                    id: object.properties.id,
+                    type: 'water-bus-route',
+                    sourceId: entry.routeSourceId,
+                    properties: object.properties,
+                    bounds: [
+                        [Math.min(...lngs), Math.min(...lats)],
+                        [Math.max(...lngs), Math.max(...lats)]
+                    ]
+                };
+            }
+        }
         for (const {sourceId, hslStationLookup} of me.staticRoutes.values()) {
             object = map.queryRenderedFeatures([
                 [point.x - RAILWAY_PICK_RADIUS, point.y - RAILWAY_PICK_RADIUS],
@@ -4753,7 +4985,8 @@ export default class extends Evented {
 
         if (isEqualObject(markedObject, object)) {
             // Lines have no single anchor point, so their popup follows the pointer.
-            if ((isRailway(object) || isStaticRoute(object)) && lngLat) {
+            if ((isRailway(object) || isStaticRoute(object) ||
+                isWaterBusRoute(object)) && lngLat) {
                 me._markedLngLat = lngLat;
                 popup.setLngLat(lngLat);
             }
@@ -4769,7 +5002,9 @@ export default class extends Evented {
                 }
             } else if (isRailway(markedObject)) {
                 me.removeRailwayOutline('railways-marked');
-            } else if (isStaticRoute(markedObject) || isRealtimeVehicle(markedObject)) {
+            } else if (isStaticRoute(markedObject) ||
+                isWaterBusFeature(markedObject) ||
+                isRealtimeVehicle(markedObject)) {
                 me.setStaticRouteState(markedObject, 'hover', false);
             } else if (!isHslStation(markedObject)) {
                 me.removeStationOutline('stations-marked');
@@ -4791,7 +5026,8 @@ export default class extends Evented {
             } else if (isRailway(object)) {
                 me._markedLngLat = lngLat;
                 me.addRailwayOutline(object, 'railways-marked');
-            } else if (isStaticRoute(object) || isRealtimeVehicle(object)) {
+            } else if (isStaticRoute(object) || isWaterBusFeature(object) ||
+                isRealtimeVehicle(object)) {
                 me._markedLngLat = lngLat;
                 me.setStaticRouteState(object, 'hover', true);
             } else if (!isHslStation(object)) {
@@ -4878,6 +5114,9 @@ export default class extends Evented {
                 me.removeRailwayOutline('railways-selected');
                 me.fire({type: 'deselection', deselection: trackedObject.id});
             } else if (isStaticRoute(trackedObject)) {
+                me.setStaticRouteState(trackedObject, 'selected', false);
+                me.fire({type: 'deselection', deselection: trackedObject.id});
+            } else if (isWaterBusFeature(trackedObject)) {
                 me.setStaticRouteState(trackedObject, 'selected', false);
                 me.fire({type: 'deselection', deselection: trackedObject.id});
             } else if (isRealtimeVehicle(trackedObject)) {
@@ -5013,6 +5252,20 @@ export default class extends Evented {
                         maxZoom: 14
                     });
                 }
+                me.fire({type: 'selection', selection: object.id});
+            } else if (isWaterBusRoute(object)) {
+                me.setStaticRouteState(object, 'selected', true);
+                if (object.bounds) {
+                    me.map.fitBounds(object.bounds, {
+                        padding: {top: 40, bottom: 40, left: 40, right: 60},
+                        maxZoom: 14
+                    });
+                }
+                me.fire({type: 'selection', selection: object.id});
+            } else if (isWaterBusPier(object)) {
+                me.setStaticRouteState(object, 'selected', true);
+                me.detailPanel = new WaterBusPierPanel({object});
+                me.detailPanel.addTo(me);
                 me.fire({type: 'selection', selection: object.id});
             } else if (isRealtimeVehicle(object)) {
                 me.setStaticRouteState(object, 'selected', true);
@@ -5176,7 +5429,25 @@ export default class extends Evented {
             {markedObject, map, popup} = me,
             {setHTML, addToMap} = options || {};
 
-        if (isStaticRoute(markedObject)) {
+        if (isWaterBusRoute(markedObject)) {
+            popup.setLngLat(me._markedLngLat);
+            if (setHTML) {
+                popup.setHTML([
+                    '<div class="railway-list">',
+                    '<div class="line-strip" style="background-color: #00b9e4;"></div>',
+                    `<span class="railway-popup-title">${helpers.escapeHTML(markedObject.properties.name)}</span>`,
+                    '</div>'
+                ].join(''));
+            }
+        } else if (isWaterBusPier(markedObject)) {
+            popup.setLngLat(markedObject.coord);
+            if (setHTML) {
+                popup.setHTML([
+                    `<strong>${helpers.escapeHTML(markedObject.properties.name)}</strong>`,
+                    '<br>Vesibussilaituri'
+                ].join(''));
+            }
+        } else if (isStaticRoute(markedObject)) {
             popup.setLngLat(me._markedLngLat);
             if (setHTML) {
                 const {shortName, longName, color} = markedObject.properties;
@@ -5592,6 +5863,8 @@ function normalizeDataSource(source, secrets) {
         routeUrl: source.routeUrl,
         timetableUrl: source.timetableUrl,
         portUrl: source.portUrl,
+        waterBusRouteUrl: source.waterBusRouteUrl,
+        waterBusPierUrl: source.waterBusPierUrl,
         serviceAlertUrl: updateOdptUrl(source.serviceAlertUrl, secrets),
         gtfsUrl: updateOdptUrl(source.gtfsUrl, secrets),
         vehiclePositionUrl: updateOdptUrl(source.vehiclePositionUrl, secrets),
@@ -5757,6 +6030,18 @@ function isStaticRoute(object) {
     return object && object.type === 'static-route';
 }
 
+function isWaterBusRoute(object) {
+    return object && object.type === 'water-bus-route';
+}
+
+function isWaterBusPier(object) {
+    return object && object.type === 'water-bus-pier';
+}
+
+function isWaterBusFeature(object) {
+    return isWaterBusRoute(object) || isWaterBusPier(object);
+}
+
 function isRealtimeVehicle(object) {
     return object && object.type === 'realtime-vehicle';
 }
@@ -5808,6 +6093,10 @@ function isEqualObject(a, b) {
         return true;
     }
     if (isStaticRoute(a) && isStaticRoute(b) && a.id === b.id && a.sourceId === b.sourceId) {
+        return true;
+    }
+    if (isWaterBusFeature(a) && isWaterBusFeature(b) &&
+        a.id === b.id && a.sourceId === b.sourceId) {
         return true;
     }
     if (isRealtimeVehicle(a) && isRealtimeVehicle(b) && a.id === b.id && a.sourceId === b.sourceId) {
